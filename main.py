@@ -1,9 +1,8 @@
 """
 FastAPI — RAG Multi-Source Intelligence Platform
-REST API serving layer
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -22,85 +21,71 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+etl_status = {"state": "idle", "message": "ETL not yet run"}
 
 class QueryRequest(BaseModel):
     query: str = "show me iris setosa samples"
     features: dict | None = None
     top_k: int = 5
 
-class ETLResponse(BaseModel):
-    status: str
-    datasets_processed: int
-    total_rows_indexed: int
-    etl_seconds: float
-
-# ── Routes ────────────────────────────────────────────────────────────────────
+def run_etl_background():
+    global etl_status
+    try:
+        etl_status = {"state": "running", "message": "ETL in progress..."}
+        summary = run_etl()
+        etl_status = {
+            "state": "done",
+            "status": "success",
+            "datasets_processed": summary["datasets_processed"],
+            "total_rows_indexed": summary["total_rows_indexed"],
+            "etl_seconds": summary["etl_seconds"],
+        }
+    except Exception as e:
+        etl_status = {"state": "error", "message": str(e)}
 
 @app.get("/", include_in_schema=False)
 def root():
     return FileResponse(STATIC_DIR / "index.html")
 
+@app.post("/api/etl", tags=["ETL"])
+def trigger_etl(background_tasks: BackgroundTasks):
+    if etl_status["state"] == "running":
+        return {"status": "already running"}
+    background_tasks.add_task(run_etl_background)
+    return {"status": "started", "message": "ETL running in background. Poll /api/etl/status"}
 
-@app.post("/api/etl", response_model=ETLResponse, tags=["ETL"])
-def trigger_etl():
-    """
-    Run the full ETL pipeline:
-    - Load 6 public datasets
-    - Select top-K features via ANOVA F-test
-    - Embed all rows into 64-d vectors
-    - Build FAISS index
-    - Cross-validate with Logistic Regression
-    Returns summary metrics.
-    """
-    summary = run_etl()
-    return ETLResponse(
-        status="success",
-        datasets_processed=summary["datasets_processed"],
-        total_rows_indexed=summary["total_rows_indexed"],
-        etl_seconds=summary["etl_seconds"],
-    )
-
+@app.get("/api/etl/status", tags=["ETL"])
+def etl_status_check():
+    return etl_status
 
 @app.post("/api/retrieve", tags=["RAG"])
 def retrieve_similar(req: QueryRequest):
-    """
-    Semantic retrieval: embed query → FAISS nearest-neighbour search.
-    Returns top-k similar rows with cosine similarity scores.
-    """
     try:
         results = retrieve(req.query, req.features, req.top_k)
         return {"query": req.query, "results": results}
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @app.get("/api/results", tags=["Analytics"])
 def get_results():
-    """All dataset evaluation results (precision, F1, feature names …)."""
     path = DATA_DIR / "results.json"
     if not path.exists():
         raise HTTPException(400, "Run ETL first.")
     return json.loads(path.read_text())
 
-
 @app.get("/api/summary", tags=["Analytics"])
 def get_summary():
-    """High-level ETL summary."""
     path = DATA_DIR / "summary.json"
     if not path.exists():
         raise HTTPException(400, "Run ETL first.")
     return json.loads(path.read_text())
 
-
 @app.get("/api/stats", tags=["Analytics"])
 def get_stats():
-    """FAISS index statistics."""
     try:
         return get_index_stats()
     except RuntimeError as e:
         raise HTTPException(400, str(e))
-
 
 @app.get("/api/health", tags=["Meta"])
 def health():
