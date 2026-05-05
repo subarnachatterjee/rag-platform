@@ -1,20 +1,25 @@
 # RAG Multi-Source Intelligence Platform
 
-Retrieval-augmented intelligence system fusing 6 public datasets through automated ETL pipelines, embedding-based retrieval and statistical feature selection.
+Retrieval-augmented intelligence platform fusing 6 public datasets through automated ETL pipelines, embedding-based retrieval and statistical feature selection.
 
 ## Live Demo
 🚀 [https://rag-platform-1s91.onrender.com](https://rag-platform-1s91.onrender.com)
 
+## Screenshots
+
+### ETL Dashboard
+![ETL Dashboard](static/dashboard.png)
+
+### Semantic Search Results
+![Search Results](static/search.png)
+
 ## Tech Stack
 Python · FastAPI · scikit-learn · FAISS · NumPy · pandas
 
-## Features
-- 6 public datasets fused via automated ETL pipeline
-- SelectKBest feature selection (ANOVA F-test)
-- 64-dimensional embeddings indexed with FAISS
-- 5-fold cross-validation with Logistic Regression
-- REST API with 6 endpoints
-- Live dashboard with semantic search
+## Results
+- 6 datasets fused — 3,156 rows indexed in 0.26s
+- Precision above 95% on iris, wine, breast_cancer, linnerud
+- FAISS index with 3,156 vectors
 
 ## API Endpoints
 | Endpoint | Method | Description |
@@ -33,13 +38,3 @@ source venv/bin/activate
 pip install -r requirements.txt
 python -m uvicorn main:app --reload --port 8000
 ```
-
-## Project Structure
-rag-platform/
-├── app/
-│   ├── etl.py          # ETL pipeline, feature selection, embeddings
-│   └── retrieval.py    # FAISS retrieval engine
-├── static/
-│   └── index.html      # dashboard UI
-├── main.py             # FastAPI app
-└── requirements.txt
